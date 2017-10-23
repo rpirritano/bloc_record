@@ -116,6 +116,83 @@ module Selection
     end
   end
 
+  def where(*args)
+    if args.count > 1
+      expression = args.shift
+      params = args
+    else
+      case args.first
+      when String
+        expression = args.first
+      when Hash
+       expression_hash = BlocRecord::Utility.convert_keys(args.first)
+       expression = expression_hash.map {|key, value| "#{key}=#{BlocRecord::Utility.sql_strings(value)}"}.join(" and ")
+      end
+    end
+
+    sql = <<-SQL
+      SELECT #{columns.join ","} FROM #{table}
+      WHERE #{expression};
+    SQL
+
+    rows = connection.execute(sql, params)
+    rows_to_array(rows)
+  end
+
+  def order(*args)
+    # order("name", :description, phone_number: :desc)
+    order_array = []
+    args.each do |arg|
+      case arg
+      when String
+        order_array << arg
+      when Symbol
+        order_array << arg.to_s
+      when Hash
+        order_array << arg.map{|key, value| "#{key} #{value}"}
+      end
+    end
+    order = order_array.join(",") # order = ['name', 'description', 'phone_number desc']
+
+    rows = connection.execute <<-SQL
+      SELECT * FROM #{table}
+      ORDER BY #{order};
+    SQL
+    rows_to_array(rows)
+  end
+
+
+  def join(*args)
+    if args.count > 1
+      joins = args.map { |arg| "INNER JOIN #{arg} ON #{arg}.#{table}_id = #{table}.id"}.join(" ")
+      rows = connection.execute <<-SQL
+        SELECT * FROM #{table} #{joins}
+      SQL
+    else
+      case args.first
+      when String
+        rows = connection.execute <<-SQL
+          SELECT * FROM #{table} #{BlocRecord::Utility.sql_strings(args.first)};
+        SQL
+      when Symbol
+        rows = connection.execute <<-SQL
+          SELECT * FROM #{table}
+          INNER JOIN #{args.first} ON #{args.first}.#{table}_id = #{table}.id;
+        SQL
+      when Hash
+        key = args.first.keys[0]
+        value = args.first.values[0]
+        rows = connection.execute <<-SQL
+          SELECT * FROM #{table}
+          INNER JOIN #{key} ON #{key}.#{table}_id = #{table}.id
+          INNER JOIN #{value} ON #{value}.#{key}_id = #{key}.id
+        SQL
+      end
+    end
+
+    rows_to_array(rows)
+  end
+
 
   private
     def init_object_from_row(row)
