@@ -203,7 +203,9 @@ module Selection
     end
 
     def rows_to_array(rows)
-      rows.map { |row| new(Hash[columns.zip(row)]) }
+      collection = BlocRecord::Collection.new
+      rows.each { |row| collection << new(Hash[columns.zip(row)]) }
+      collection
     end
 
     def method_missing(m, *args, &block)
@@ -214,7 +216,7 @@ module Selection
         else
           raise "#{name} is not a valid method"
         end
-      elsif m.match(/update_name/)
+      elsif m.match(/update_name/) #update to support dynamic update method calls
         name = m.to_s.split('update_name')[1]
         if columns.include?(name)
           update(name, *args)
